@@ -173,8 +173,21 @@ export const AuthProvider: React.FC<Props> = ({ children }) => {
         closeWebSocket();
       }
     } catch (error) {
-      // If 401 => user not authenticated
       if (isAxiosError(error) && error.response?.status === 401) {
+        console.log("AuthProvider: status 401, trying refresh");
+        try {
+          const refreshResponse = await axiosInstance.post("/api/auth/refresh");
+          if (refreshResponse.data?.success) {
+            const retry = await axiosInstance.get<AuthState>("/api/auth/status");
+            setAuthState({ ...retry.data, isLoading: false });
+            if (retry.data.authenticated) {
+              openWebSocket();
+            }
+            return;
+          }
+        } catch {
+          // ignore refresh errors
+        }
         console.log("AuthProvider: user not authenticated");
       } else {
         console.error("AuthProvider: unexpected error:", error);

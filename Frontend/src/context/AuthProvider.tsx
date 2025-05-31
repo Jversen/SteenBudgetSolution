@@ -42,16 +42,34 @@ const [wsEnabled, setWsEnabled] = useState(false);
     try {
       console.log("AuthProvider: Checking /api/auth/status");
       const response = await axiosInstance.get<AuthState>("/api/auth/status");
-    // In development, force firstTimeLogin to true regardless of API response.
-    const authData = import.meta.env.MODE === "development"
-      ? { ...response.data, firstTimeLogin: true }
-      : response.data;
-    setAuthState({
-      ...authData,
-      isLoading: false,
-    });
+
+      const authData = import.meta.env.MODE === "development"
+        ? { ...response.data, firstTimeLogin: true }
+        : response.data;
+
+      setAuthState({
+        ...authData,
+        isLoading: false,
+      });
     } catch (error) {
       if (isAxiosError(error) && error.response?.status === 401) {
+        console.log("AuthProvider: status 401, attempting refresh");
+        try {
+          const refreshResponse = await axiosInstance.post("/api/auth/refresh");
+          if (refreshResponse.data?.success) {
+            const retry = await axiosInstance.get<AuthState>("/api/auth/status");
+            const authData = import.meta.env.MODE === "development"
+              ? { ...retry.data, firstTimeLogin: true }
+              : retry.data;
+            setAuthState({
+              ...authData,
+              isLoading: false,
+            });
+            return;
+          }
+        } catch (refreshError) {
+          console.error("AuthProvider: refresh failed", refreshError);
+        }
         console.log("AuthProvider: user not authenticated");
       } else {
         console.error("AuthProvider: unexpected error:", error);
